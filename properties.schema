@@ -1,0 +1,138 @@
+{
+  "type": "object",
+  "$schema": "http://json-schema.org/draft-04/schema",
+  "id": "http://jsonschema.net",
+  "required": false,
+  "properties": {
+    "pluginLocations": {
+      "type": "object",
+      "required": true,
+      "properties": {
+        "config": {
+          "type": "object",
+          "properties": {
+            "_openaiodi": {
+                "type": "object",
+                "required": true,
+                "legend": "Open AI (ODI)",
+                "properties": {
+                    "apiUrl": {
+                        "type": "string",
+                        "required": true,
+                        "title": "API URL",
+                        "help": "The URL endpoint for the OpenAI API",
+                        "inputType" : "Text",
+                        "validators": ["required"],
+                        "default": "https://api.openai.com/v1/completions"
+                    },
+                    "apiKey": {
+                        "type": "string",
+                        "required": false,
+                        "title": "API Key",
+                        "inputType" : "Text",
+                        "help": "Your API key (DO NOT USE THIS IN PRODUCTION! See the extensions README for details.)",
+                        "validators": [],
+                        "default": "your_api_key_here"
+                    },
+                    "_testMode": {
+                        "type": "boolean",
+                        "required": true,
+                        "default": false,
+                        "title": "Enable testing mode",
+                        "inputType": "Checkbox",
+                        "validators": [],
+                        "help": "If enabled, the the plugin will response with the placeholder responser and not query the AI API."
+                    },
+                    "_testModeResponse": {
+                        "type": "string",
+                        "required": false,
+                        "default": "Are you sure about that? 3/10",
+                        "title": "Test mode response",
+                        "inputType": "Text",
+                        "validators": [],
+                        "help": "The test response to any messages."
+                    },
+                    "model": {
+                        "type": "string",
+                        "required": true,
+                        "title": "Model",
+                        "inputType" : "Text",
+                        "help": "The language model to use (e.g., 'gpt-3.5-turbo')",
+                        "validators": ["required"],
+                        "default": "gpt-3.5-turbo"
+                    },
+                    "temperature": {
+                        "type": "number",
+                        "required": true,
+                        "title": "Temperature",
+                        "inputType" : "Number",
+                        "help": "Controls the randomness of the output",
+                        "validators": ["required"],
+                        "default": 0.7
+                    },
+                    "maxTokens": {
+                        "type": "integer",
+                        "required": true,
+                        "title": "Max Tokens",
+                        "inputType" : "Number",
+                        "help": "Maximum number of tokens the model can generate",
+                        "validators": ["required"],
+                        "default": 150
+                    },
+                    "topP": {
+                        "type": "number",
+                        "required": true,
+                        "title": "Top P",
+                        "inputType" : "Number",
+                        "help": "Nucleus sampling parameter",
+                        "validators": ["required"],
+                        "default": 1.0
+                    },
+                    "frequencyPenalty": {
+                        "type": "number",
+                        "required": true,
+                        "inputType" : "Number",
+                        "title": "Frequency Penalty",
+                        "help": "Penalty to decrease likelihood of repeating tokens",
+                        "validators": ["required"],
+                        "default": 0
+                    },
+                    "presencePenalty": {
+                        "type": "number",
+                        "required": true,
+                        "title": "Presence Penalty",
+                        "inputType" : "Number",
+                        "help": "Penalty to decrease likelihood of generating off-topic responses",
+                        "validators": ["required"],
+                        "default": 0
+                    },
+                    "stop": {
+                        "type": "array",
+                        "required": true,
+                        "title": "Stop Tokens",
+                        "help": "List of strings to stop generation at",
+                        "items": {
+                            "type": "object",
+                            "required": true,
+                            "properties": {
+                                "text": {
+                                    "type": "string",
+                                    "required": false,
+                                    "default": "",
+                                    "title": "Stop text",
+                                    "inputType": "Text",
+                                    "validators": [],
+                                    "help": "The stop text",
+                                    "translatable": true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+          }
+        }
+      }
+    }
+  }
+}

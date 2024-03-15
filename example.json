@@ -1,0 +1,16 @@
+{
+	"_openaiodi": {
+        "apiUrl": "https://api.openai.com/v1/completions",
+		"apiKey": "your_api_key_here",
+		"_testMode": false,
+		"_testModeResponse": "Hello, I'm not an AI but the answer you are looking for is 42!",
+		"model": "gpt-3.5-turbo",
+		"temperature": 0.7,
+		"max_tokens": 150,
+		"topP": 1.0,
+		"frequencyPenalty": 0,
+		"presencePenalty": 0,
+        "n": 1,
+		"stop": ["\n", "<|endoftext|>"]
+	}
+}

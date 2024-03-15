@@ -1,0 +1,22 @@
+{
+    "name": "adapt-odi-openAI",
+    "version": "0.1.1",
+    "framework": ">=5.0",
+    "homepage": "https://github.com/theodi/adapt-odi-openAI",
+    "authors": [
+      "David Tarrant <davetaz@theodi.org>"
+    ],
+    "displayName": "OpenAI API (ODI)",
+    "extension": "openai-odi",
+    "description": "An extension to interface with OpenAI's Conversation API",
+    "main": "/js/index.js",
+    "keywords": [
+      "adapt-plugin",
+      "adapt-extension",
+      "openai",
+      "conversation",
+      "ai"
+    ],
+    "license": "MIT",
+    "targetAttribute": "_openaiodi"
+  }
