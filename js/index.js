@@ -91,23 +91,31 @@ class OpenAIODI extends Backbone.Controller {
     constructor() {
         super();
         this.conversations = [];
-        this.listenTo(Adapt, 'pageView:postReady', this.checkAIReady);
+        this.ready = false;
+        this.listenTo(Adapt, 'pageView:postReady', this.onPostReady);
     }
 
     initialize() {
     }
 
-    async checkAIReady() {
-        if (this.AIReady) return true;
+    onPostReady() {
+        this.config = Adapt.config.get('_openaiodi');
+        this.checkAIReady();
+    }
 
+    async checkAIReady() {
+        if (this.ready) return true;
+        console.log('checking AI Ready');
         const conversation = this.createConversation();
         conversation.addMessage({ role: 'user', content: 'What day is it today?' })
 
         try {
-            if (this.config.apiUrl && !this.config.useDynamicToken) {
+            if (this.config.apiUrl && !this.config.useClientAPIKey) {
                 const responseCode = await conversation.getResponseCode();
                 if (responseCode.status === 200) {
                     console.log("AI Ready");
+                    this.ready = true;
+                    Adapt.trigger('openai:ready');
                     this.destroyConversation(conversation);
                     return true;
                 } else {
@@ -115,8 +123,51 @@ class OpenAIODI extends Backbone.Controller {
                     throw new Error(`Error: ${responseCode.status} ${responseCode.statusText}`);
                 }
             } else if (this.config.useClientAPIKey && this.config.clientAuthServer) {
-                this.destroyConversation(conversation);
-                throw new Error('Error: 401 Authorization Required');
+                if (this.config.apiKey) {
+                    const responseCode = await conversation.getResponseCode();
+                    if (responseCode.status === 200) {
+                        console.log("AI Ready");
+                        this.ready = true;
+                        Adapt.trigger('openai:ready');
+                        // Store API key locally with expiration date
+                        const expirationDate = new Date();
+                        expirationDate.setDate(expirationDate.getDate() + 1); // 24 hours from now
+                        localStorage.setItem('apiKey', this.config.apiKey);
+                        localStorage.setItem('apiKeyExpiration', expirationDate.getTime());
+                        this._closeOverlay();
+                        this.destroyConversation(conversation);
+                        return true;
+                    } else {
+                        setTimeout(() => {
+                            this.checkAIReady();
+                        }, 10000);
+                    }
+                }
+                if (!this.config.apiKey && localStorage.getItem('apiKey') && localStorage.getItem('apiKeyExpiration') > Date.now()) {
+                    // Check if there's a valid API key stored locally
+                    this.config.apiKey = localStorage.getItem('apiKey');
+                    const responseCode = await conversation.getResponseCode();
+                    if (responseCode.status === 200) {
+                        console.log("AI Ready");
+                        this.ready = true;
+                        Adapt.trigger('openai:ready');
+                        this.destroyConversation(conversation);
+                        return true;
+                    } else {
+                        // If the stored API key is invalid, remove it from local storage
+                        localStorage.removeItem('apiKey');
+                        localStorage.removeItem('apiKeyExpiration');
+                        delete this.config.apiKey;
+                    }
+                }
+                if (!this.config.apiKey) {
+                    this.config.apiKey = this._generateGUID();
+                    this._displayOverlay();
+                    this.destroyConversation(conversation);
+                    setTimeout(() => {
+                        this.checkAIReady();
+                    }, 10000);
+                }
             } else {
                 this.destroyConversation(conversation);
                 throw new Error('Error: 500 Internal Server Error');
@@ -129,7 +180,6 @@ class OpenAIODI extends Backbone.Controller {
     }
 
     createConversation() {
-        this.config = Adapt.config.get('_openaiodi');
         const conversation = new Conversation(this.config);
         this.conversations.push(conversation);
         return conversation;
@@ -141,6 +191,67 @@ class OpenAIODI extends Backbone.Controller {
             this.conversations.splice(index, 1);
         }
     }
+
+    _generateGUID() {
+        // Function to generate a GUID
+        const s4 = () => {
+            return Math.floor((1 + Math.random()) * 0x10000)
+                .toString(16)
+                .substring(1);
+        };
+
+        return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+               s4() + '-' + s4() + s4() + s4();
+    }
+
+    _closeOverlay() {
+        const overlay = document.getElementById('_openaiodi_overlay');
+        if (overlay) {
+            document.body.removeChild(overlay);
+        }
+    }
+
+    _displayOverlay() {
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.id = '_openaiodi_overlay'; // Set the ID of the overlay element
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        overlay.style.zIndex = '9999';
+
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Close';
+        closeButton.style.position = 'absolute';
+        closeButton.style.top = '10px';
+        closeButton.style.right = '10px';
+        closeButton.style.padding = '5px 10px';
+        closeButton.style.backgroundColor = '#fff';
+        closeButton.style.border = '1px solid #000';
+        closeButton.style.borderRadius = '5px';
+        closeButton.style.cursor = 'pointer';
+
+        closeButton.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+        });
+
+        const iframe = document.createElement('iframe');
+        iframe.src = `${this.config.clientAuthServer}?accessToken=${this.config.apiKey}`;
+        iframe.style.position = 'absolute';
+        iframe.style.top = '50%';
+        iframe.style.left = '50%';
+        iframe.style.transform = 'translate(-50%, -50%)';
+        iframe.style.width = '800px';
+        iframe.style.height = '400px';
+        iframe.style.border = 'none';
+
+        overlay.appendChild(closeButton);
+        overlay.appendChild(iframe);
+        document.body.appendChild(overlay);
+    }
+
 }
 
 Adapt.openaiodi = new OpenAIODI();

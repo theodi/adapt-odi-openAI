@@ -40,7 +40,9 @@ Alternatively, you can configure the extension directly in your course's `config
     "frequencyPenalty": 0,
     "presencePenalty": 0,
     "n": 1,
-    "stop": ["\n", ""]
+    "stop": ["\n", ""],
+    "useClientAPIKey": true,
+    "clientAuthServer": "https://your-auth-server.com/authenticate"
 }
 ```
 
@@ -48,11 +50,31 @@ Alternatively, you can configure the extension directly in your course's `config
 
 Remember: Adapt outputs and code is all client side executed. This includes any apiKeys! So any user could easily find the API key in your config file. Also if you put the output source code on a public server, then anyone can find the API Key! If you are using OpenAI, they will mostly likely detect the key and instantly revoke it as you have been stoopid.
 
-You should consider using a proxy or deploying the package into an LMS where only limited trusted individuals have access.
+You should consider using a proxy or a custom key authentication server (see below)
+
+## Using a Custom Key Authentication Server
+
+The Adapt OpenAI Extension supports the use of a custom key authentication server for managing API keys. This allows for more flexible and secure handling of authentication tokens.
+
+### Configuration
+
+To use a custom key authentication server, set the `useClientAPIKey` parameter to `true` in your configuration. Additionally, provide the URL of your custom key authentication server using the `clientAuthServer` parameter.
+
+### How it Works
+
+When `useClientAPIKey` is set to `true` and a `clientAuthServer` URL is provided, the extension generates an API key locally (as a GUID) and includes it in the request to the authentication server (which is displayed as an overlay in an iFrame). This server is responsible for validating the user (e.g. via OAuth) and the API key and updating the `apiUrl` service so this key is valid.
+
+The plugin continues to poll the `apiUrl` with this key until it receives a valid response, indicating that the API key has been authenticated and is now valid for use with the OpenAI API.
+
+By leveraging a custom key authentication server, you can implement user authentication and key validation logic tailored to your specific requirements, ensuring secure and controlled access to the OpenAI services.
+
+Apologies for the oversight. Let's move the explanation to the beginning of the "Usage" section. Here's the revised version:
 
 ## Usage
 
-Once the extension is installed and configured, you can use it to create interactive conversations within your Adapt courses. Here's how you can use it:
+Once the extension is installed and configured, you can employ it to create interactive conversations within your Adapt courses. The plugin sends a trigger `Adapt.trigger('openai:ready')` upon successfully connecting to the OpenAI API and being ready for conversations. Other plugins can listen for this trigger to perform additional actions such as creating conversations, displaying UI elements, or triggering specific events based on the readiness of the AI service.
+
+Here's how you can use it:
 
 1. Create a new instance of the conversation:
 
@@ -66,7 +88,7 @@ const conversation = Adapt.openaiodi.createConversation();
 conversation.addMessage({ role: 'user', content: 'Hello!' });
 ```
 
-3. Get a response from the AI using the `getResponse` method:
+3. Obtain a response from the AI using the `getResponse` method:
 
 ```javascript
 conversation.getResponse()
@@ -78,7 +100,7 @@ conversation.getResponse()
     });
 ```
 
-4. Clear messages from the conversation when needed:
+4. Clear messages from the conversation when necessary:
 
 ```javascript
 conversation.clearMessages();
@@ -91,7 +113,3 @@ You can test the functionality of the extension by enabling test mode in the con
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
-```
-
-Feel free to modify the content according to your specific requirements or add any additional information you find relevant.
