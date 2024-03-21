@@ -34,6 +34,24 @@
                         "validators": [],
                         "default": "your_api_key_here"
                     },
+                    "useClientAPIKey": {
+                        "type": "boolean",
+                        "required": true,
+                        "default": false,
+                        "title": "Use client API Key",
+                        "inputType": "Checkbox",
+                        "validators": [],
+                        "help": "If enabled, the the plugin will generate an API Key dynamically, normally this would be authenticated using the client auth server."
+                    },
+                    "clientAuthServer": {
+                        "type": "string",
+                        "required": true,
+                        "title": "Client API Key auth server",
+                        "help": "The URL endpoint for the client API Key authorisation server (see documentation)",
+                        "inputType" : "Text",
+                        "validators": [],
+                        "default": ""
+                    },
                     "_testMode": {
                         "type": "boolean",
                         "required": true,
