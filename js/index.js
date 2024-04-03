@@ -4,11 +4,62 @@ class Conversation {
     constructor(config) {
         this.messages = [];
         this.config = config;
+        this.currentBlock = {};
     }
 
     addMessage(message) {
         this.messages.push(message);
     }
+
+    setCurrentBlock(block) {
+        this.currentBlock = block;
+    }
+
+    async setConversationID(contentObjectId) {
+        const _courseId = Adapt.config.get("_courseId");
+        const programmeData = Adapt.course.get("_skillsFramework") || null;
+        let _skillsFramework = {};
+        if (programmeData && programmeData._items[0]) {
+            _skillsFramework.programmeUri = programmeData._items[0].uri;
+            _skillsFramework.programmeTitle = programmeData._items[0].title;
+        }
+
+        // Do nothing if not using a proxy
+        if (!this.config.clientAuthServer) {
+            return;
+        }
+
+        const apiKey = this.config.apiKey;
+        const apiUrl = this.config.apiUrl;
+
+        const body = {
+            contentObjectId: contentObjectId,
+            courseId: _courseId,
+            _skillsFramework: _skillsFramework
+        };
+
+        try {
+            const response = await fetch(this.config.clientAuthServer + "/createConversation", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + apiKey
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error('Error: ' + response.status + ' ' + response.statusText + ' - ' + errorData.error.code + ' - ' + errorData.error.message);
+            }
+
+            const responseData = await response.json();
+            this.id = responseData.id;
+        } catch (error) {
+            throw new Error('Error fetching response: ' + error.message);
+        }
+    }
+
 
     async getResponse() {
         //Need to to limit messages to number of tokens here, cutting of the start if necessary.
@@ -22,7 +73,21 @@ class Conversation {
         }
 
         const apiKey = this.config.apiKey;
-        const apiUrl = this.config.apiUrl;
+        var apiUrl = this.config.apiUrl;
+
+        const body = {
+            model: this.config.model,
+            messages: this.messages,
+            max_tokens: this.config.maxTokens,
+            temperature: this.config.temperature,
+            n: 1,
+            stop: this.config.stop
+        }
+
+        if (this.id) {
+            apiUrl = apiUrl + "/" + this.id;
+            body.currentBlock = this.currentBlock;
+        }
 
         try {
             const response = await fetch(apiUrl, {
@@ -31,14 +96,7 @@ class Conversation {
                     'Content-Type': 'application/json',
                     Authorization: 'Bearer ' + apiKey
                 },
-                body: JSON.stringify({
-                    model: this.config.model,
-                    messages: this.messages,
-                    max_tokens: this.config.maxTokens,
-                    temperature: this.config.temperature,
-                    n: 1,
-                    stop: this.config.stop
-                })
+                body: JSON.stringify(body)
             });
 
             if (!response.ok) {
@@ -179,9 +237,12 @@ class OpenAIODI extends Backbone.Controller {
         }
     }
 
-    createConversation() {
+    createConversation(contentObjectID) {
         const conversation = new Conversation(this.config);
         this.conversations.push(conversation);
+        if (this.ready) {
+            conversation.setConversationID(contentObjectID);
+        }
         return conversation;
     }
 
