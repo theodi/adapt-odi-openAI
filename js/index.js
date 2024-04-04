@@ -1,22 +1,41 @@
 import Adapt from 'core/js/adapt';
+import data from 'core/js/data';
 
 class Conversation {
-    constructor(config) {
-        this.messages = [];
+    //Build a conversaion, can be an existing one
+    constructor(config,messages = [], id = "") {
+        this.messages = messages;
         this.config = config;
+        this.id = id;
         this.currentBlock = {};
     }
 
+    //Add a message to a conversaion
     addMessage(message) {
         this.messages.push(message);
     }
 
+    //Set the block
     setCurrentBlock(block) {
         this.currentBlock = block;
     }
 
-    async setConversationID(contentObjectId) {
-        const _courseId = Adapt.config.get("_courseId");
+    //Get a new conversation ID
+    async setMetadata(contentObjectId) {
+        // Do nothing if not using a proxy
+        if (!this.config.clientAuthServer) {
+            return;
+        }
+
+        const course = {};
+        course.id = Adapt.config.get("_courseId");
+        course.title = Adapt.course.get('title');
+
+        const cotemp = data.findById(contentObjectId);
+        const contentObject = {};
+        contentObject.id = contentObjectId;
+        contentObject.title = cotemp.get('title');
+
         const programmeData = Adapt.course.get("_skillsFramework") || null;
         let _skillsFramework = {};
         if (programmeData && programmeData._items[0]) {
@@ -24,17 +43,12 @@ class Conversation {
             _skillsFramework.programmeTitle = programmeData._items[0].title;
         }
 
-        // Do nothing if not using a proxy
-        if (!this.config.clientAuthServer) {
-            return;
-        }
-
         const apiKey = this.config.apiKey;
         const apiUrl = this.config.apiUrl;
 
         const body = {
-            contentObjectId: contentObjectId,
-            courseId: _courseId,
+            course: course,
+            contentObject: contentObject,
             _skillsFramework: _skillsFramework
         };
 
@@ -60,7 +74,7 @@ class Conversation {
         }
     }
 
-
+    //Get response from the AI
     async getResponse() {
         //Need to to limit messages to number of tokens here, cutting of the start if necessary.
         if (this.config._testMode) {
@@ -111,6 +125,7 @@ class Conversation {
         }
     }
 
+    //Used to check if the AI is ready
     async getResponseCode() {
         const apiKey = this.config.apiKey;
         const apiUrl = this.config.apiUrl;
@@ -140,12 +155,14 @@ class Conversation {
         }
     }
 
+    //Clear all messages from the conversation
     clearMessages() {
         this.messages = [];
     }
 }
 
 class OpenAIODI extends Backbone.Controller {
+    //Build a controller that has many conversaions available
     constructor() {
         super();
         this.conversations = [];
@@ -153,38 +170,57 @@ class OpenAIODI extends Backbone.Controller {
         this.listenTo(Adapt, 'pageView:postReady', this.onPostReady);
     }
 
+    //Does nothing
     initialize() {
     }
 
+    //Get a config for the plugin, at the moment all conversations hve the config which is weird but ok
     onPostReady() {
         this.config = Adapt.config.get('_openaiodi');
         this.checkAIReady();
     }
 
+    /**
+     * Checks if the AI is ready and polls for a valid token.
+     * This is a complex method that handles various scenarios to ensure the AI is ready for interaction.
+     * @returns {boolean|string} Returns true if the AI is ready, otherwise returns an error message.
+     */
     async checkAIReady() {
+        // If AI is already ready, return true
         if (this.ready) return true;
-        console.log('checking AI Ready');
+
+        // Create a conversation instance
         const conversation = this.createConversation();
-        conversation.addMessage({ role: 'user', content: 'What day is it today?' })
+        conversation.addMessage({ role: 'user', content: 'What day is it today?' });
 
         try {
+            // Check if using API URL and not client API key
             if (this.config.apiUrl && !this.config.useClientAPIKey) {
+                // Get response code from the conversation
                 const responseCode = await conversation.getResponseCode();
                 if (responseCode.status === 200) {
                     console.log("AI Ready");
+                    // Trigger event indicating AI is ready
                     this.ready = true;
                     Adapt.trigger('openai:ready');
+                    // Destroy the conversation
                     this.destroyConversation(conversation);
                     return true;
                 } else {
+                    // If response code is not 200, throw an error
                     this.destroyConversation(conversation);
                     throw new Error(`Error: ${responseCode.status} ${responseCode.statusText}`);
                 }
-            } else if (this.config.useClientAPIKey && this.config.clientAuthServer) {
+            }
+            // If using client API key and client auth server
+            else if (this.config.useClientAPIKey && this.config.clientAuthServer) {
+                // Check if API key is provided
                 if (this.config.apiKey) {
+                    // Get response code from the conversation
                     const responseCode = await conversation.getResponseCode();
                     if (responseCode.status === 200) {
                         console.log("AI Ready");
+                        // Trigger event indicating AI is ready
                         this.ready = true;
                         Adapt.trigger('openai:ready');
                         // Store API key locally with expiration date
@@ -192,60 +228,77 @@ class OpenAIODI extends Backbone.Controller {
                         expirationDate.setDate(expirationDate.getDate() + 1); // 24 hours from now
                         localStorage.setItem('apiKey', this.config.apiKey);
                         localStorage.setItem('apiKeyExpiration', expirationDate.getTime());
+                        // Close overlay
                         this._closeOverlay();
+                        // Destroy the conversation
                         this.destroyConversation(conversation);
                         return true;
                     } else {
+                        // If response code is not 200, wait for 10 seconds and retry
                         setTimeout(() => {
                             this.checkAIReady();
                         }, 10000);
                     }
                 }
+                // If API key is not provided and a valid key exists in local storage
                 if (!this.config.apiKey && localStorage.getItem('apiKey') && localStorage.getItem('apiKeyExpiration') > Date.now()) {
                     // Check if there's a valid API key stored locally
                     this.config.apiKey = localStorage.getItem('apiKey');
+                    // Get response code from the conversation
                     const responseCode = await conversation.getResponseCode();
                     if (responseCode.status === 200) {
                         console.log("AI Ready");
+                        // Trigger event indicating AI is ready
                         this.ready = true;
                         Adapt.trigger('openai:ready');
+                        // Destroy the conversation
                         this.destroyConversation(conversation);
                         return true;
                     } else {
-                        // If the stored API key is invalid, remove it from local storage
+                        // If response code is not 200, remove invalid API key from local storage
                         localStorage.removeItem('apiKey');
                         localStorage.removeItem('apiKeyExpiration');
                         delete this.config.apiKey;
                     }
                 }
+                // If API key is not provided or expired, generate a new one and display overlay
                 if (!this.config.apiKey) {
                     this.config.apiKey = this._generateGUID();
                     this._displayOverlay();
+                    // Destroy the conversation
                     this.destroyConversation(conversation);
+                    // Retry after 10 seconds
                     setTimeout(() => {
                         this.checkAIReady();
                     }, 10000);
                 }
             } else {
+                // If neither API URL nor client API key is provided, throw an error
                 this.destroyConversation(conversation);
                 throw new Error('Error: 500 Internal Server Error');
             }
         } catch (error) {
+            // Log error and return error message
             console.error(error);
             this.destroyConversation(conversation);
             return error.message;
         }
     }
 
-    createConversation(contentObjectID) {
+    // Create a new conversation, at the same time call retrieve conversations for this user that are related to a specified contentObjectID
+    // This should be split into two functions
+    createConversation() {
         const conversation = new Conversation(this.config);
         this.conversations.push(conversation);
-        if (this.ready) {
-            conversation.setConversationID(contentObjectID);
-        }
         return conversation;
     }
 
+    // Get a specific conversation
+    getConversation(id) {
+        return this.conversations.find(conversation => conversation.id === id);
+    }
+
+    // Destroy a conversation (client side only), mainly used for testing AI is ready
     destroyConversation(conversation) {
         const index = this.conversations.indexOf(conversation);
         if (index !== -1) {
@@ -253,6 +306,56 @@ class OpenAIODI extends Backbone.Controller {
         }
     }
 
+    // Get all conversations stored locally
+    getConversations() {
+        return this.conversations;
+    }
+
+    // Retrieve conversaions from the server, calls a trigger when done.
+    async retrieveConversations(contentObjectId) {
+        if (!this.config.clientAuthServer || !this.ready) {
+            return;
+        }
+        try {
+            const response = await fetch(this.config.clientAuthServer + "/conversations?contentObjectId=" + contentObjectId, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + this.config.apiKey
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Error: ' + response.status + ' ' + response.statusText);
+            }
+
+            const conversations = await response.json();
+            conversations.forEach(conversationData => {
+                const id = conversationData._id;
+
+                // Check if the conversation with the same ID already exists
+                const existingConversation = this.conversations.find(conversation => conversation.id === id);
+                if (!existingConversation) {
+                    const messages = conversationData.history.map(entry => ({
+                        role: entry.message.role,
+                        content: entry.message.content
+                    }));
+
+                    const conversation = new Conversation(this.config);
+                    conversation.id = id;
+                    conversation.messages = messages;
+
+                    this.conversations.push(conversation);
+                }
+            });
+            Adapt.trigger('openai:conversationsUpdated',this.conversations);
+
+        } catch (error) {
+            throw new Error('Error fetching conversations: ' + error.message);
+        }
+    }
+
+    // Generate a GUID to use as the user Token
     _generateGUID() {
         // Function to generate a GUID
         const s4 = () => {
@@ -265,13 +368,7 @@ class OpenAIODI extends Backbone.Controller {
                s4() + '-' + s4() + s4() + s4();
     }
 
-    _closeOverlay() {
-        const overlay = document.getElementById('_openaiodi_overlay');
-        if (overlay) {
-            document.body.removeChild(overlay);
-        }
-    }
-
+    // Display login window overlay
     _displayOverlay() {
         const overlay = document.createElement('div');
         overlay.style.position = 'fixed';
@@ -311,6 +408,14 @@ class OpenAIODI extends Backbone.Controller {
         overlay.appendChild(closeButton);
         overlay.appendChild(iframe);
         document.body.appendChild(overlay);
+    }
+
+    // Close login window overlay
+    _closeOverlay() {
+        const overlay = document.getElementById('_openaiodi_overlay');
+        if (overlay) {
+            document.body.removeChild(overlay);
+        }
     }
 
 }
