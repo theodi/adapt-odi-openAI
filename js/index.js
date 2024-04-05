@@ -20,6 +20,84 @@ class Conversation {
         this.currentBlock = block;
     }
 
+    // Set a metadata value, with a hack!
+    async set(key, value) {
+        this[key] = value;
+
+        const { clientAuthServer, apiKey } = this.config;
+
+        let attemptCount = 0;
+
+        const trySetMetadata = async () => {
+            if (!this.id) {
+                if (attemptCount >= 10) {
+                    throw new Error('Conversation ID is not available after 10 attempts');
+                }
+                console.log('Conversation ID is not available. Waiting for it to become available...');
+                await new Promise(resolve => setTimeout(resolve, 200)); // Wait for 200ms
+                attemptCount++;
+                await trySetMetadata(); // Retry recursively
+                return;
+            }
+
+            try {
+                const response = await fetch(`${clientAuthServer}/conversation/${this.id}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: 'Bearer ' + apiKey
+                    },
+                    body: JSON.stringify({ [key]: value })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error('Error: ' + response.status + ' ' + response.statusText + ' - ' + errorData.error);
+                }
+
+                console.log('Metadata value set successfully');
+            } catch (error) {
+                throw new Error('Error setting metadata value: ' + error.message);
+            }
+        };
+
+        // Start the initial attempt
+        await trySetMetadata();
+    }
+
+    // Set a rating for a message
+    async setRating(messageId, rating) {
+        if (!this.id) {
+            return;
+        }
+
+        try {
+            const { clientAuthServer, apiKey } = this.config; // Destructuring apiUrl and apiKey from config
+            const response = await fetch(`${clientAuthServer}/conversation/${this.id}/messages/${messageId}`, { // Constructing the URL
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: 'Bearer ' + apiKey
+                },
+                body: JSON.stringify({ rating })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error('Error: ' + response.status + ' ' + response.statusText + ' - ' + errorData.error);
+            }
+
+            console.log('Rating set successfully');
+        } catch (error) {
+            throw new Error('Error setting rating: ' + error.message);
+        }
+    }
+
+    //Get something from conversation, e.g. course
+    get(key) {
+        return this[key];
+    }
+
     //Get a new conversation ID
     async setMetadata(contentObjectId) {
         // Do nothing if not using a proxy
@@ -27,29 +105,29 @@ class Conversation {
             return;
         }
 
-        const course = {};
-        course.id = Adapt.config.get("_courseId");
-        course.title = Adapt.course.get('title');
+        this.course = {};
+        this.course.id = Adapt.config.get("_courseId");
+        this.course.title = Adapt.course.get('title');
 
         const cotemp = data.findById(contentObjectId);
-        const contentObject = {};
-        contentObject.id = contentObjectId;
-        contentObject.title = cotemp.get('title');
+        this.contentObject = {};
+        this.contentObject.id = contentObjectId;
+        this.contentObject.title = cotemp.get('title');
 
         const programmeData = Adapt.course.get("_skillsFramework") || null;
-        let _skillsFramework = {};
+        this._skillsFramework = {};
         if (programmeData && programmeData._items[0]) {
-            _skillsFramework.programmeUri = programmeData._items[0].uri;
-            _skillsFramework.programmeTitle = programmeData._items[0].title;
+            this._skillsFramework.programmeUri = programmeData._items[0].uri;
+            this._skillsFramework.programmeTitle = programmeData._items[0].title;
         }
 
         const apiKey = this.config.apiKey;
         const apiUrl = this.config.apiUrl;
 
         const body = {
-            course: course,
-            contentObject: contentObject,
-            _skillsFramework: _skillsFramework
+            course: this.course,
+            contentObject: this.contentObject,
+            _skillsFramework: this._skillsFramework
         };
 
         try {
@@ -86,17 +164,22 @@ class Conversation {
             });
         }
 
-        const apiKey = this.config.apiKey;
-        var apiUrl = this.config.apiUrl;
+        // Clean the messages to remove any unnecessary data
+        const cleanedMessages = this.messages.map(message => ({
+            content: message.content,
+            role: message.role
+        }));
+
+        let { apiKey, apiUrl, model, maxTokens, temperature, stop } = this.config;
 
         const body = {
-            model: this.config.model,
-            messages: this.messages,
-            max_tokens: this.config.maxTokens,
-            temperature: this.config.temperature,
+            model,
+            messages: cleanedMessages,
+            max_tokens: maxTokens,
+            temperature,
             n: 1,
-            stop: this.config.stop
-        }
+            stop
+        };
 
         if (this.id) {
             apiUrl = apiUrl + "/" + this.id;
@@ -117,9 +200,8 @@ class Conversation {
                 const errorData = await response.json();
                 throw new Error('Error: ' + response.status + ' ' + response.statusText + ' - ' + errorData.error.code + ' - ' + errorData.error.message);
             }
-
             const responseData = await response.json();
-            return responseData.choices[0].message.content;
+            return responseData.choices[0].message;
         } catch (error) {
             throw new Error('Error fetching response: ' + error.message);
         }
@@ -338,12 +420,15 @@ class OpenAIODI extends Backbone.Controller {
                 if (!existingConversation) {
                     const messages = conversationData.history.map(entry => ({
                         role: entry.message.role,
-                        content: entry.message.content
+                        content: entry.message.content,
+                        _id: entry._id || null,
+                        rating: entry.rating || null
                     }));
 
                     const conversation = new Conversation(this.config);
                     conversation.id = id;
                     conversation.messages = messages;
+                    //load all the other parameters here
 
                     this.conversations.push(conversation);
                 }
