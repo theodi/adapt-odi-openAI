@@ -54,8 +54,7 @@ class Conversation {
                     const errorData = await response.json();
                     throw new Error('Error: ' + response.status + ' ' + response.statusText + ' - ' + errorData.error);
                 }
-
-                console.log('Metadata value set successfully');
+                this.updateTokenExpiry();
             } catch (error) {
                 throw new Error('Error setting metadata value: ' + error.message);
             }
@@ -86,8 +85,7 @@ class Conversation {
                 const errorData = await response.json();
                 throw new Error('Error: ' + response.status + ' ' + response.statusText + ' - ' + errorData.error);
             }
-
-            console.log('Rating set successfully');
+            this.updateTokenExpiry();
         } catch (error) {
             throw new Error('Error setting rating: ' + error.message);
         }
@@ -144,7 +142,7 @@ class Conversation {
                 const errorData = await response.json();
                 throw new Error('Error: ' + response.status + ' ' + response.statusText + ' - ' + errorData.error.code + ' - ' + errorData.error.message);
             }
-
+            this.updateTokenExpiry();
             const responseData = await response.json();
             this.id = responseData.id;
         } catch (error) {
@@ -201,6 +199,7 @@ class Conversation {
                 throw new Error('Error: ' + response.status + ' ' + response.statusText + ' - ' + errorData.error.code + ' - ' + errorData.error.message);
             }
             const responseData = await response.json();
+            this.updateTokenExpiry();
             return responseData.choices[0].message;
         } catch (error) {
             throw new Error('Error fetching response: ' + error.message);
@@ -240,6 +239,16 @@ class Conversation {
     //Clear all messages from the conversation
     clearMessages() {
         this.messages = [];
+    }
+
+    //Update the expiration date on the token each time it is used
+    updateTokenExpiry() {
+        if (!this.config.clientAuthServer) {
+            return;
+        }
+        const expirationDate = new Date();
+        expirationDate.setDate(expirationDate.getDate() + 1); // 24 hours from now
+        localStorage.setItem('apiKeyExpiration', expirationDate.getTime());
     }
 }
 
