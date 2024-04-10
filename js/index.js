@@ -129,7 +129,7 @@ class Conversation {
         };
 
         try {
-            const response = await fetch(this.config.clientAuthServer + "/createConversation", {
+            const response = await fetch(this.config.clientAuthServer + "/conversation/create", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

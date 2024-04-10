@@ -1,6 +1,6 @@
 {
     "name": "adapt-odi-openAI",
-    "version": "0.5.1",
+    "version": "0.5.2",
     "framework": ">=5.0",
     "homepage": "https://github.com/theodi/adapt-odi-openAI",
     "authors": [
